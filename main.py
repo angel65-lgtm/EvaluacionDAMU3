@@ -1,84 +1,86 @@
-from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy import (
-    create_engine,
-    Column,
-    Integer,
-    String,
-    TIMESTAMP,
-    ForeignKey,
-    DECIMAL,
-)
-
+from fastapi import FastAPI, Depends, HTTPException, Form, UploadFile, File
+from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Enum, DECIMAL, TIMESTAMP
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
-from pydantic import BaseModel
-import hashlib  # Para encriptar con MD5
-import requests
-from datetime import datetime
+from sqlalchemy.orm import sessionmaker, relationship, Session
 from fastapi.middleware.cors import CORSMiddleware
+import hashlib
+import shutil
+import os
+from datetime import datetime
+from sqlalchemy import Enum
+from pydantic import BaseModel
+from fastapi.staticfiles import StaticFiles
 
-# Conexión a la base de datos
+# =======================
+# CONFIG
+# =======================
 DATABASE_URL = "mysql+pymysql://root:1n2n3m4789@localhost/entregas_paquexpress"
+
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
 app = FastAPI()
 
-# Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "*"
-    ],  # Puedes poner "*" para permitir todos los orígenes, o una lista específica
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"], # Permite todos los métodos: GET, POST, PUT, DELETE
-    allow_headers=["*"], # Permite todas las cabeceras
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-# Modelos SQLAlchemy
-class User(Base):
+# =======================
+# MODELOS
+# =======================
+class Usuario(Base):
     __tablename__ = "usuario"
+
     id_usuario = Column(Integer, primary_key=True, index=True)
-    usr_nombre = Column(String(50), unique=True, nullable=False)
-    usr_password = Column(String(255), nullable=False)
+    usr_nombre = Column(String(100))
+    usr_password = Column(String(255))
 
+class PaqueteCreate(BaseModel):
+    nombre: str
+    descripcion: str
+    origen: str
+    destino: str
+    imagen: str = None
 
-class Attendance(Base):
-    __tablename__ = "attendance"
-    attendance_id = Column(Integer, primary_key=True, index=True)
-    id_usuario = Column(Integer, ForeignKey("usuario.id_usuario"))
-    latitude = Column(
-        DECIMAL(10, 8), nullable=False
-    ) # DECIMAL con precisión 10 y 8 decimales
-    longitude = Column(
-        DECIMAL(11, 8), nullable=False
-    ) # DECIMAL con precisión 11 y 8 decimales
-    address = Column(String(255))
-    registered_at = Column(TIMESTAMP, default=datetime.utcnow)
-    user = relationship("User")
+class Paquete(Base):
+    __tablename__ = "paquetes"
 
-Base.metadata.create_all(bind=engine)
+    id_paquete = Column(Integer, primary_key=True, index=True)
+    pa_nombre = Column(String(100))
+    pa_descripcion = Column(String)
+    pa_dirOrigen = Column(String)
+    pa_dirDestino = Column(String)
+    pa_imagen = Column(String)
 
+    status = Column(
+        Enum('asignado','recolectado','entregado', name='status_enum'),
+        default='asignado'
+    )
 
-# Modelos Pydantic para validación de datos
-class RegisterModel(BaseModel):
-    usr_nombre: str
-    password: str
+    usuario_id = Column(Integer, ForeignKey("usuario.id_usuario"))
 
+    usuario = relationship("Usuario", backref="paquetes")
 
-class LoginModel(BaseModel):
-    usr_nombre: str
-    password: str
+class Entrega(Base):
+    __tablename__ = "entregas"
 
+    id = Column(Integer, primary_key=True, index=True)
+    paquete_id = Column(Integer, ForeignKey("paquetes.id_paquete"))
+    foto = Column(String)
+    latitud = Column(DECIMAL(10,8))
+    longitud = Column(DECIMAL(11,8))
+    fecha = Column(TIMESTAMP, default=datetime.utcnow)
 
-class AttendanceModel(BaseModel):
-    id_usuario: int
-    latitude: float
-    longitude: float
-
-# Dependencia DB
+# =======================
+# DB
+# =======================
 def get_db():
     db = SessionLocal()
     try:
@@ -86,80 +88,164 @@ def get_db():
     finally:
         db.close()
 
-
-# Función para encriptar con MD5
-def md5_hash(password: str) -> str:
+# =======================
+# SEGURIDAD
+# =======================
+def hash_password(password: str):
     return hashlib.md5(password.encode()).hexdigest()
 
+# =======================
+# AUTH
+# =======================
 
-# Endpoint: Registro de usuario
+# REGISTRO
 @app.post("/register/")
-def register(data: RegisterModel, db=Depends(get_db)):
-    hashed_pw = md5_hash(data.password)  # Encriptación con MD5
-    user = User(
-        usr_nombre=data.usr_nombre, usr_password=hashed_pw
+def register(
+    usr_nombre: str = Form(...),
+    password: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    user = Usuario(
+        usr_nombre=usr_nombre,
+        usr_password=hash_password(password)
     )
+
     db.add(user)
     db.commit()
     db.refresh(user)
+
     return {"msg": "Usuario registrado", "id_usuario": user.id_usuario}
 
 
-# Endpoint: Login
+# LOGIN
 @app.post("/login/")
-def login(data: LoginModel, db=Depends(get_db)):
-    user = db.query(User).filter(User.usr_nombre == data.usr_nombre).first()
-    if not user or user.usr_password != md5_hash(data.usr_password):
-        raise HTTPException(status_code=400, detail="Credenciales inválidas")
-    return {"msg": "Login exitoso", "id_usuario": user.id_usuario}
+def login(
+    usr_nombre: str = Form(...),
+    password: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    user = db.query(Usuario).filter(Usuario.usr_nombre == usr_nombre).first()
+
+    if not user or user.usr_password != hash_password(password):
+        raise HTTPException(status_code=400, detail="Credenciales incorrectas")
+
+    return {"id_usuario": user.id_usuario, "nombre": user.usr_nombre}
 
 
-# Endpoint: Pase de lista con GPS y dirección cercana
-@app.post("/attendance/")
-def attendance(data: AttendanceModel, db=Depends(get_db)):
-    try:
-        # Consumir API pública de Nominatim con cabecera obligatoria
-        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={data.latitude}&lon={data.longitude}"
-        headers = {"User-Agent": "FastAPIApp/1.0"}  # Cabecera requerida
-        response = requests.get(url, headers=headers)
+# =======================
+# PAQUETES
+# =======================
 
-        # Validar que la respuesta sea JSON
-        if response.status_code == 200:
-            result = response.json()
-            address = result.get("display_name", "Dirección no disponible")
-        else:
-            address = "Error al obtener dirección"
+@app.post("/paquetes/")
+def crear_paquete(data: PaqueteCreate, db=Depends(get_db)):
 
-        # Guardar registro en BD
-        record = Attendance(
-            id_usuario=data.id_usuario,
-            latitude=data.latitude,
-            longitude=data.longitude,
-            address=address,
-        )
-        db.add(record)
-        db.commit()
-        db.refresh(record)
-        return {
-            "msg": "Registro guardado",
-            "attendance_id": record.attendance_id,
-            "address": address,
-        }
+    paquete = Paquete(
+        pa_nombre=data.nombre,
+        pa_descripcion=data.descripcion,
+        pa_dirOrigen=data.origen,
+        pa_dirDestino=data.destino,
+        pa_imagen=data.imagen,
+        status="asignado",  # o puedes dejarlo sin asignar si quieres
+        usuario_id=None     # aún no asignado
+    )
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+    db.add(paquete)
+    db.commit()
+    db.refresh(paquete)
 
-@app.get("/attendance/{id_usuario}")
-def get_attendance(id_usuario: int, db=Depends(get_db)):
-    records = db.query(Attendance).filter(Attendance.id_usuario == id_usuario).all()
+    return {
+        "msg": "Paquete creado",
+        "id_paquete": paquete.id_paquete
+    }
+
+@app.put("/paquete/{id}/asignar/{usuario_id}")
+def asignar_paquete(id: int, usuario_id: int, db=Depends(get_db)):
+
+    paquete = db.query(Paquete).filter(
+        Paquete.id_paquete == id
+    ).first()
+
+    if not paquete:
+        raise HTTPException(status_code=404, detail="Paquete no encontrado")
+
+    paquete.usuario_id = usuario_id
+    paquete.status = "asignado"
+
+    db.commit()
+
+    return {"msg": "Paquete asignado"}
+
+# VER PAQUETES DEL USUARIO
+@app.get("/paquetes/{usuario_id}")
+def get_paquetes(usuario_id: int, db=Depends(get_db)):
+
+    paquetes = db.query(Paquete).filter(
+        Paquete.usuario_id == usuario_id
+    ).all()
 
     return [
         {
-            "attendance_id": r.attendance_id,
-            "latitude": float(r.latitude),
-            "longitude": float(r.longitude),
-            "address": r.address,
-            "registered_at": r.registered_at,
+            "id": p.id_paquete,
+            "nombre": p.pa_nombre,
+            "descripcion": p.pa_descripcion,
+            "destino": p.pa_dirDestino,
+            "status": p.status,
+            "imagen": p.pa_imagen
         }
-        for r in records
+        for p in paquetes
     ]
+
+# RECOLECTAR PAQUETE
+@app.put("/paquete/{id}/recolectar")
+def recolectar(id: int, db: Session = Depends(get_db)):
+    paquete = db.query(Paquete).filter(Paquete.id_paquete == id).first()
+
+    if not paquete:
+        raise HTTPException(status_code=404, detail="Paquete no encontrado")
+
+    paquete.status = "recolectado"
+    db.commit()
+
+    return {"msg": "Paquete recolectado"}
+
+
+# ENTREGAR PAQUETE (foto + ubicación)
+@app.put("/paquete/{id}/entregar")
+def entregar(
+    id: int,
+    latitud: float = Form(...),
+    longitud: float = Form(...),
+    foto: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    paquete = db.query(Paquete).get(id)
+
+    if not paquete:
+        raise HTTPException(status_code=404, detail="Paquete no encontrado")
+
+    # Guardar imagen
+    os.makedirs("uploads", exist_ok=True)
+    file_path = f"uploads/{foto.filename}"
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(foto.file, buffer)
+
+    # Guardar entrega
+    entrega = Entrega(
+        paquete_id=id,
+        foto=file_path,
+        latitud=latitud,
+        longitud=longitud
+    )
+
+    paquete.status = "entregado"
+
+    db.add(entrega)
+    db.commit()
+
+    return {"msg": "Paquete entregado correctamente"}
+
+# =======================
+# CREAR TABLAS
+# =======================
+Base.metadata.create_all(bind=engine)

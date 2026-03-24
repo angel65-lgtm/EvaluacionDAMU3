@@ -3,39 +3,60 @@ import 'package:http/http.dart' as http;
 import 'paquete.dart';
 
 class ApiService {
-  final String baseUrl = "http://localhost:8000";
 
-  Future<int> login(String nombre, String password) async {
+  static const String baseUrl = "http://127.0.0.1:8000";
+
+  // 🔐 LOGIN (FORM-DATA)
+  static Future<Map<String, dynamic>> login(String usuario, String password) async {
+
     final response = await http.post(
-      Uri.parse("$baseUrl/login"),
+      Uri.parse("$baseUrl/login/"),
       body: {
-        "nombre": nombre,
+        "usr_nombre": usuario,
         "password": password,
       },
     );
 
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['id'];
+      return jsonDecode(response.body);
     } else {
-      throw Exception("Login incorrecto");
+      throw Exception("Error login");
     }
   }
 
+  // 📦 OBTENER PAQUETES
   Future<List<Paquete>> getPaquetes(int userId) async {
     final response = await http.get(
       Uri.parse("$baseUrl/paquetes/$userId"),
     );
 
-    final data = jsonDecode(response.body);
-    return data.map<Paquete>((e) => Paquete.fromJson(e)).toList();
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data.map<Paquete>((e) => Paquete.fromJson(e)).toList();
+    } else {
+      throw Exception("Error al obtener paquetes");
+    }
   }
 
+  // 📥 RECOLECTAR
   Future<void> recolectar(int id) async {
-    await http.put(Uri.parse("$baseUrl/paquete/$id/recolectar"));
+    final response = await http.put(
+      Uri.parse("$baseUrl/paquete/$id/recolectar"),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception("Error al recolectar");
+    }
   }
 
+  // 📤 ENTREGAR
   Future<void> entregar(int id) async {
-    await http.put(Uri.parse("$baseUrl/paquete/$id/entregar"));
+    final response = await http.put(
+      Uri.parse("$baseUrl/paquete/$id/entregar"),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception("Error al entregar");
+    }
   }
 }

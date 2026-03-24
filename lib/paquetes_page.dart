@@ -23,11 +23,26 @@ class _PaquetesPageState extends State<PaquetesPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<List<Paquete>>(
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(
+      title: Text("Mis paquetes"),
+    ),
+    body: FutureBuilder<List<Paquete>>(
       future: paquetes,
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return CircularProgressIndicator();
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(child: Text("Error al cargar paquetes"));
+        }
+
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return Center(child: Text("No hay paquetes"));
+        }
 
         final data = snapshot.data!;
 
@@ -60,6 +75,7 @@ class _PaquetesPageState extends State<PaquetesPage> {
           },
         );
       },
-    );
-  }
+    ),
+  );
+}
 }
