@@ -145,8 +145,8 @@ def crear_paquete(data: PaqueteCreate, db=Depends(get_db)):
         pa_dirOrigen=data.origen,
         pa_dirDestino=data.destino,
         pa_imagen=data.imagen,
-        status="asignado",  # o puedes dejarlo sin asignar si quieres
-        usuario_id=None     # aún no asignado
+        status="asignado", 
+        usuario_id=None 
     )
 
     db.add(paquete)
@@ -175,6 +175,40 @@ def asignar_paquete(id: int, usuario_id: int, db=Depends(get_db)):
 
     return {"msg": "Paquete asignado"}
 
+#obtener usuarios
+@app.get("/usuarios/todos")
+def obtener_todos_los_usuarios(db: Session = Depends(get_db)):
+    try:
+        usuarios = db.query(Usuario).all()
+        return [
+            {
+                "id_usuario": u.id_usuario,
+                "nombre": u.usr_nombre
+            } for u in usuarios
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+#obtener paquetes de la DB
+@app.get("/paquetes/todos")
+def obtener_todos_los_paquetes(db: Session = Depends(get_db)):
+    try:
+        paquetes = db.query(Paquete).all()
+        return [
+            {
+                "id": p.id_paquete,
+                "nombre": p.pa_nombre,
+                "descripcion": p.pa_descripcion,
+                "origen": p.pa_dirOrigen,
+                "destino": p.pa_dirDestino,
+                "status": p.status,
+                "usuario_id": p.usuario_id,
+                "imagen": p.pa_imagen
+            } for p in paquetes
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
 # VER PAQUETES DEL USUARIO
 @app.get("/paquetes/{usuario_id}")
 def get_paquetes(usuario_id: int, db=Depends(get_db)):

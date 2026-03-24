@@ -39,9 +39,12 @@ class ApiService {
   }
 
   // 📥 RECOLECTAR
-  Future<void> recolectar(int id) async {
+  Future<void> recolectar(int id, int userId) async {
     final response = await http.put(
       Uri.parse("$baseUrl/paquete/$id/recolectar"),
+      body: {
+        "usuario_id": userId.toString(),
+      },
     );
 
     if (response.statusCode != 200) {
@@ -49,18 +52,25 @@ class ApiService {
     }
   }
 
-  // 📤 ENTREGAR
-  Future<void> entregar(int id, String imagePath, String attendance) async {
-    final response = await http.put(
+  // 📤 ENTREGAR (Con Foto, Asistencia y GPS)
+  Future<void> entregar(int id, String imagePath, String attendance, double lat, double lng) async {
+    var request = http.MultipartRequest(
+      'PUT',
       Uri.parse("$baseUrl/paquete/$id/entregar"),
-      body: {
-        "foto_evidencia": imagePath,
-        "attendance_confirm": attendance,
-      },
     );
 
-    if (response.statusCode != 200) {
-      throw Exception("Error al entregar");
+    // Campos de texto (Form-data)
+    request.fields['attendance'] = attendance;
+    request.fields['latitud'] = lat.toString();
+    request.fields['longitud'] = lng.toString();
+
+    // Archivo de imagen
+    request.files.add(await http.MultipartFile.fromPath('foto', imagePath));
+
+    var streamedResponse = await request.send();
+    
+    if (streamedResponse.statusCode != 200) {
+      throw Exception("Error al finalizar la entrega en el servidor");
     }
   }
 }

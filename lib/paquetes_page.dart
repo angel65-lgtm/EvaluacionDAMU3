@@ -62,7 +62,7 @@ class _PaquetesPageState extends State<PaquetesPage> {
                 trailing: ElevatedButton(
                   child: Text('Recolectar'),
                   onPressed: () async {
-                    await api.recolectar(p.id);
+                    await api.recolectar(p.id, widget.userId);
                     setState(() {
                       paquetes = api.getPaquetes(widget.userId);
                     });
