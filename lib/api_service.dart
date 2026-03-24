@@ -50,9 +50,13 @@ class ApiService {
   }
 
   // 📤 ENTREGAR
-  Future<void> entregar(int id) async {
+  Future<void> entregar(int id, String imagePath, String attendance) async {
     final response = await http.put(
       Uri.parse("$baseUrl/paquete/$id/entregar"),
+      body: {
+        "foto_evidencia": imagePath,
+        "attendance_confirm": attendance,
+      },
     );
 
     if (response.statusCode != 200) {
