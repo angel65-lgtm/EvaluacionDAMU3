@@ -184,7 +184,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 20),
                 const Text(
-                  "v1.0.2 - Logística Segura",
+                  "v1.0.3 - Oficial",
                   style: TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ],
