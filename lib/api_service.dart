@@ -1,14 +1,14 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'paquete.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ApiService {
+  // En laptop/Chrome, localhost es más estable
+  static const String baseUrl = "http://localhost:8000";
 
-  static const String baseUrl = "http://127.0.0.1:8000";
-
-  // 🔐 LOGIN (FORM-DATA)
+  // 🔐 LOGIN
   static Future<Map<String, dynamic>> login(String usuario, String password) async {
-
     final response = await http.post(
       Uri.parse("$baseUrl/login/"),
       body: {
@@ -52,25 +52,35 @@ class ApiService {
     }
   }
 
-  // 📤 ENTREGAR (Con Foto, Asistencia y GPS)
-  Future<void> entregar(int id, String imagePath, String attendance, double lat, double lng) async {
+  // 📤 ENTREGAR (Versión final para Laptop/Chrome)
+  Future<void> entregar(int id, XFile imageFile, String attendance, double lat, double lng) async {
     var request = http.MultipartRequest(
       'PUT',
       Uri.parse("$baseUrl/paquete/$id/entregar"),
     );
 
-    // Campos de texto (Form-data)
+    // Campos de texto
     request.fields['attendance'] = attendance;
     request.fields['latitud'] = lat.toString();
     request.fields['longitud'] = lng.toString();
 
-    // Archivo de imagen
-    request.files.add(await http.MultipartFile.fromPath('foto', imagePath));
-
-    var streamedResponse = await request.send();
+    // Importante para Web: Leer bytes del XFile
+    var bytes = await imageFile.readAsBytes();
+    var multipartFile = http.MultipartFile.fromBytes(
+      'foto', 
+      bytes,
+      filename: imageFile.name,
+    );
     
-    if (streamedResponse.statusCode != 200) {
-      throw Exception("Error al finalizar la entrega en el servidor");
+    request.files.add(multipartFile);
+
+    // Enviamos y esperamos respuesta completa para ver errores
+    var streamedResponse = await request.send();
+    var response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode != 200) {
+      print("Error del servidor: ${response.body}");
+      throw Exception("Error al entregar: ${response.statusCode}");
     }
   }
 }

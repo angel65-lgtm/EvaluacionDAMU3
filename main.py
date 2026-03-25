@@ -158,22 +158,6 @@ def crear_paquete(data: PaqueteCreate, db=Depends(get_db)):
         "id_paquete": paquete.id_paquete
     }
 
-@app.put("/paquete/{id}/asignar/{usuario_id}")
-def asignar_paquete(id: int, usuario_id: int, db=Depends(get_db)):
-
-    paquete = db.query(Paquete).filter(
-        Paquete.id_paquete == id
-    ).first()
-
-    if not paquete:
-        raise HTTPException(status_code=404, detail="Paquete no encontrado")
-
-    paquete.usuario_id = usuario_id
-    paquete.status = "asignado"
-
-    db.commit()
-
-    return {"msg": "Paquete asignado"}
 
 #obtener usuarios
 @app.get("/usuarios/todos")
@@ -278,6 +262,24 @@ def entregar(
     db.commit()
 
     return {"msg": "Paquete entregado correctamente"}
+
+@app.put("/paquete/{id}/asignar/{usuario_id}")
+def asignar_paquete(id: int, usuario_id: int, db=Depends(get_db)):
+
+    paquete = db.query(Paquete).filter(
+        Paquete.id_paquete == id
+    ).first()
+
+    if not paquete:
+        raise HTTPException(status_code=404, detail="Paquete no encontrado")
+
+    paquete.usuario_id = usuario_id
+    paquete.status = "asignado"
+
+    db.commit()
+
+    return {"msg": "Paquete asignado"}
+
 
 # =======================
 # CREAR TABLAS

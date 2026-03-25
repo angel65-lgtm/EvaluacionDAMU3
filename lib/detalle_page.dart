@@ -76,7 +76,7 @@ class _DetallePageState extends State<DetallePage> {
     try {
       await api.entregar(
         widget.paquete.id,
-        _imageFile!.path, 
+        _imageFile!, 
         _attendanceController.text.trim(),
         _currentPosition!.latitude,
         _currentPosition!.longitude,
