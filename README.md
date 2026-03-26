@@ -2,7 +2,7 @@
 
 # Proceso de instalación de la app flutter para Paquexpress.
 
-1.- Instalar el lenguaje de flutter, [link para descargar e instalar flutter](https://youtu.be/tiOCrXG3Fq4?si=Tx4wNeWZgh2da-gJ)
+1.- Instalar el lenguaje de flutter, [Tutorial para descargar e instalar flutter](https://youtu.be/tiOCrXG3Fq4?si=Tx4wNeWZgh2da-gJ)
 
 2.- Descargar los archivos ".dart" en la carpeta "lib" del repositorio y el archivo main.py
 
